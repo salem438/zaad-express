@@ -1433,6 +1433,13 @@
 
             state.orders.unshift(newOrder);
 
+            // تفريغ حقول إدخال بيانات العميل والخصم بعد إتمام الطلب بنجاح
+            document.getElementById('checkout-name').value = '';
+            document.getElementById('checkout-phone').value = '';
+            document.getElementById('checkout-address').value = '';
+            document.getElementById('promo-code-input').value = '';
+            state.appliedDiscount = 0;
+
             // Save last customer info for quick reorder convenience
             localStorage.setItem('zaad_last_customer', JSON.stringify({ name, phone, address }));
 
