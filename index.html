@@ -630,8 +630,6 @@
         </div>
     </div>
 
-
-
     <!-- Add Restaurant Modal (Admin) -->
     <div id="add-rest-modal" class="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-xs hidden flex items-center justify-center p-3">
         <div class="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-4 shadow-2xl space-y-3 text-xs">
@@ -830,24 +828,7 @@
         let state = {
             restaurants: JSON.parse(localStorage.getItem('zaad_restaurants')) || DEFAULT_RESTAURANTS,
             cart: JSON.parse(localStorage.getItem('zaad_cart')) || [],
-            orders: JSON.parse(localStorage.getItem('zaad_orders')) || [
-                {
-                    id: "ORD-9021",
-                    customer: "أحمد محمد",
-                    phone: "01009876543",
-                    address: "المعادي، شارع 9",
-                    restaurant: "برجر كينج هاوس",
-                    items: [{ name: "برجر دبل تشيز", count: 2, price: 110, note: "بدون بصل" }],
-                    subtotal: 220,
-                    discountRate: 0,
-                    discountAmount: 0,
-                    total: 235,
-                    status: "delivering",
-                    lat: 30.0444, lng: 31.2357,
-                    date: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
-                }
-            ],
-
+            orders: JSON.parse(localStorage.getItem('zaad_orders')) || [],
             users: JSON.parse(localStorage.getItem('zaad_users')) || [
                 { id: 1, name: "المدير العام", email: "admin@zaad.com", password: "123", role: "admin" },
                 { id: 2, name: "كابتن أحمد (مندوب)", email: "driver@zaad.com", password: "123", role: "driver" }
@@ -874,17 +855,13 @@
             localStorage.setItem('zaad_dark', state.darkMode);
         }
 
-
-        let lastKnownPendingIds = new Set(state.orders.filter(o => o.status === 'pending').map(o => o.id));
-        let driverAlertInterval = null;
+        let lastKnownPendingIds = new Set();
 
         function playNotificationChime() {
             try {
                 const AudioCtx = window.AudioContext || window.webkitAudioContext;
                 const ctx = new AudioCtx();
                 const now = ctx.currentTime;
-
-                // Pleasant two-tone delivery alert chime
                 [880, 1174.66].forEach((freq, idx) => {
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();
@@ -899,7 +876,7 @@
                     osc.stop(now + idx * 0.18 + 0.46);
                 });
             } catch (e) {
-                console.warn("Audio blocked until user interaction", e);
+                console.warn("Audio blocked", e);
             }
         }
 
@@ -908,7 +885,6 @@
             showToast("تم تشغيل رنين تنبيه الطلبات الجديدة 🔔");
         }
 
-        // Monitor new pending orders automatically (both in same tab and across browser tabs via storage event)
         function checkNewPendingOrders(forceRing = false) {
             const currentPending = state.orders.filter(o => o.status === 'pending');
             let hasBrandNew = false;
@@ -920,7 +896,6 @@
                 }
             });
 
-            // Clean up accepted/completed IDs
             const currentIds = new Set(currentPending.map(o => o.id));
             lastKnownPendingIds.forEach(id => {
                 if (!currentIds.has(id)) lastKnownPendingIds.delete(id);
@@ -934,16 +909,6 @@
                 showToast(`🔔 تنبيه: يوجد ${currentPending.length} طلب جديد في الانتظار!`);
             }
         }
-
-        window.addEventListener('storage', (e) => {
-            if (e.key === 'zaad_orders') {
-                state.orders = JSON.parse(e.newValue || '[]');
-                checkNewPendingOrders(false);
-                renderClientActiveOrders();
-                if (!document.getElementById('view-driver').classList.contains('hidden')) renderDriverView();
-                if (!document.getElementById('view-admin').classList.contains('hidden')) renderAdminView();
-            }
-        });
 
         window.onload = function() {
             if (state.darkMode) {
@@ -974,7 +939,6 @@
         }
 
         function switchRole(role) {
-            // Check authentication for protected roles (driver / admin)
             if ((role === 'driver' || role === 'admin') && !state.authSession[role]) {
                 openRoleLoginModal(role);
                 return;
@@ -1003,11 +967,6 @@
 
             if (role === 'driver') {
                 renderDriverView();
-                const pendingCount = state.orders.filter(o => o.status === 'pending').length;
-                if (pendingCount > 0) {
-                    playNotificationChime();
-                    showToast(`🔔 لديك ${pendingCount} طلب جديد في الانتظار!`);
-                }
             }
             if (role === 'admin') renderAdminView();
         }
@@ -1116,7 +1075,7 @@
                         ? isFav
                         : r.category === state.currentCategory;
                 const matchesSearch = r.name.toLowerCase().includes(searchVal) || 
-                                     r.menu.some(m => m.name.toLowerCase().includes(searchVal));
+                                     (r.menu && r.menu.some(m => m.name.toLowerCase().includes(searchVal)));
                 return matchesCat && matchesSearch;
             });
 
@@ -1135,7 +1094,7 @@
                     <div class="relative h-36 overflow-hidden bg-gray-100 dark:bg-gray-800">
                         <img src="${r.image}" alt="${r.name}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/600x400/e2e8f0/64748b?text=Restaurant'">
                         <div class="absolute top-2.5 right-2.5 bg-white/90 dark:bg-gray-900/90 px-2 py-0.5 rounded-full text-[10px] font-bold text-gray-800 dark:text-gray-200 shadow-xs flex items-center gap-1">
-                            <i class="fa-solid fa-star text-amber-400"></i> ${r.rating}
+                            <i class="fa-solid fa-star text-amber-400"></i> ${r.rating || 5.0}
                         </div>
                         <button onclick="toggleFavoriteRestaurant(event, ${r.id})" class="absolute top-2.5 left-2.5 w-7 h-7 rounded-full bg-white/90 dark:bg-gray-900/90 shadow-xs flex items-center justify-center transition hover:scale-110" title="حفظ في المفضلة">
                             <i class="fa-${isFav ? 'solid text-red-500' : 'regular text-gray-400'} fa-heart text-xs"></i>
@@ -1146,7 +1105,7 @@
                         <div class="flex justify-between items-start">
                             <div>
                                 <h3 class="font-bold text-gray-900 dark:text-gray-100 text-xs sm:text-sm">${r.name}</h3>
-                                <p class="text-[10px] text-gray-400 mt-0.5"><i class="fa-regular fa-clock ml-1"></i> ${r.time}</p>
+                                <p class="text-[10px] text-gray-400 mt-0.5"><i class="fa-regular fa-clock ml-1"></i> ${r.time || '20-30 دقيقة'}</p>
                             </div>
                             <span class="text-[9px] font-bold bg-brand-50 dark:bg-brand-900/30 text-brand-600 px-2 py-0.5 rounded-md">${getCategoryLabel(r.category)}</span>
                         </div>
@@ -1221,6 +1180,11 @@
                 return;
             }
 
+            if (!rest.menu || rest.menu.length === 0) {
+                container.innerHTML = `<div class="text-center py-6 text-gray-400">لا توجد وجبات مضافة حالياً</div>`;
+                return;
+            }
+
             container.innerHTML = rest.menu.map(item => {
                 const isFavItem = state.favItems.includes(item.id);
                 return `
@@ -1233,7 +1197,7 @@
                                     <i class="fa-${isFavItem ? 'solid text-red-500' : 'regular text-gray-400'} fa-heart"></i>
                                 </button>
                             </div>
-                            <p class="text-[10px] text-gray-400">${item.desc}</p>
+                            <p class="text-[10px] text-gray-400">${item.desc || ''}</p>
                             <span class="font-bold text-brand-600 text-xs mt-1 block">${item.price} ج.م</span>
                         </div>
                         <button onclick="addToCartWithNote(${rest.id}, ${item.id})" class="bg-brand-50 hover:bg-brand-600 text-brand-600 hover:text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0">
@@ -1247,6 +1211,7 @@
 
         function renderModalReviews(rest) {
             const container = document.getElementById('modal-reviews-container');
+            const reviews = rest.reviews || [];
             container.innerHTML = `
                 <div class="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl space-y-2">
                     <h5 class="font-bold text-xs text-gray-700 dark:text-gray-300">أضف تقييمك</h5>
@@ -1260,11 +1225,11 @@
                     </div>
                 </div>
                 <div class="space-y-2 pt-1">
-                    ${rest.reviews.map(r => `
+                    ${reviews.map(r => `
                         <div class="p-2.5 border border-gray-100 dark:border-gray-800 rounded-xl space-y-0.5">
                             <div class="flex justify-between items-center text-[11px]">
                                 <span class="font-bold text-gray-800 dark:text-gray-200">${r.name}</span>
-                                <span class="text-amber-400 font-bold">${'⭐'.repeat(Math.floor(r.rating))}</span>
+                                <span class="text-amber-400 font-bold">${'⭐'.repeat(Math.floor(r.rating || 5))}</span>
                             </div>
                             <p class="text-[10px] text-gray-500">${r.comment}</p>
                         </div>
@@ -1278,10 +1243,15 @@
             const comment = document.getElementById('new-rev-comment').value.trim();
             const rating = Number(document.getElementById('new-rev-rating').value);
             if (!comment) { showToast("أدخل التعليق", "error"); return; }
+            if (!rest.reviews) rest.reviews = [];
             rest.reviews.unshift({ name: "أنت", rating, comment });
-            saveState();
-            renderModalReviews(rest);
-            showToast("تمت الإضافة بنجاح");
+
+            // مزامنة التقييمات في Firestore
+            db.collection("restaurants").doc(String(rest.id)).update({ reviews: rest.reviews })
+              .then(() => {
+                  renderModalReviews(rest);
+                  showToast("تمت إضافة التقييم بنجاح");
+              });
         }
 
         function addToCartWithNote(restId, itemId) {
@@ -1431,49 +1401,26 @@
                 date: new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit'})
             };
 
-            state.orders.unshift(newOrder);
+            // رفع الطلب مباشرة إلى سحابة Firestore لكي يظهر عند الإدارة والمندوبين
+            db.collection("orders").doc(orderId).set(newOrder)
+              .then(() => {
+                  document.getElementById('checkout-name').value = '';
+                  document.getElementById('checkout-phone').value = '';
+                  document.getElementById('checkout-address').value = '';
+                  document.getElementById('promo-code-input').value = '';
+                  state.appliedDiscount = 0;
+                  state.cart = [];
+                  saveState();
+                  updateCartUI();
+                  toggleCartDrawer(false);
+                  showToast("تم إرسال الطلب بنجاح!");
 
-            // تفريغ حقول إدخال بيانات العميل والخصم بعد إتمام الطلب بنجاح
-            document.getElementById('checkout-name').value = '';
-            document.getElementById('checkout-phone').value = '';
-            document.getElementById('checkout-address').value = '';
-            document.getElementById('promo-code-input').value = '';
-            state.appliedDiscount = 0;
-
-            // Save last customer info for quick reorder convenience
-            localStorage.setItem('zaad_last_customer', JSON.stringify({ name, phone, address }));
-
-            state.cart = [];
-            state.appliedDiscount = 0;
-            document.getElementById('promo-code-input').value = '';
-            const receiptInput = document.getElementById('payment-receipt-file');
-            if (receiptInput) receiptInput.value = '';
-            saveState();
-            updateCartUI();
-            toggleCartDrawer(false);
-            renderClientActiveOrders();
-
-            // Trigger audio notification for new pending order!
-            checkNewPendingOrders(true);
-            showToast("تم إرسال الطلب بنجاح!");
-
-            if (openWhatsAppAfter) {
-                const itemsLines = newOrder.items.map(i => `• ${i.name} (×${i.count}) = ${i.price * i.count} ج.م${i.note ? ` [${i.note}]` : ''}`).join('\n');
-                const msg = `*طلب جديد - زاد اكسبريس* 🛵\n` +
-                            `رقم الفاتورة: *${newOrder.id}*\n` +
-                            `المطعم: ${newOrder.restaurant}\n` +
-                            `العميل: ${newOrder.customer}\n` +
-                            `الموبايل: ${newOrder.phone}\n` +
-                            `العنوان: ${newOrder.address}\n` +
-                            `طريقة الدفع: ${getPaymentMethodLabel(newOrder.paymentMethod)}\n` +
-                            `------------------\n` +
-                            `${itemsLines}\n` +
-                            `------------------\n` +
-                            (discountAmount > 0 ? `الخصم: -${discountAmount} ج.م\n` : '') +
-                            `التوصيل: 15 ج.م\n` +
-                            `*الإجمالي المطلوب: ${newOrder.total} ج.م*`;
-                window.open(`https://wa.me/${state.adminWhatsApp}?text=${encodeURIComponent(msg)}`, '_blank');
-            }
+                  if (openWhatsAppAfter) {
+                      const itemsLines = newOrder.items.map(i => `• ${i.name} (×${i.count}) = ${i.price * i.count} ج.م`).join('\n');
+                      const msg = `*طلب جديد - زاد اكسبريس* 🛵\nرقم الفاتورة: *${newOrder.id}*\nالمطعم: ${newOrder.restaurant}\nالعميل: ${newOrder.customer}\nالموبايل: ${newOrder.phone}\nالعنوان: ${newOrder.address}\n*الإجمالي المطلوب: ${newOrder.total} ج.م*`;
+                      window.open(`https://wa.me/${state.adminWhatsApp}?text=${encodeURIComponent(msg)}`, '_blank');
+                  }
+              });
         }
 
         function submitOrder(openWhatsAppAfter = false) {
@@ -1484,14 +1431,14 @@
             const paymentMethod = document.querySelector('input[name="payment-method"]:checked')?.value || 'cod';
 
             if (!name || !phone || !address) {
-                showToast("يرجى إدخال الاسم ورقم الموبايل والعنوان بالتفصيل", "error");
+                showToast("يرجى إدخال البيانات كاملة", "error");
                 return;
             }
 
             if (paymentMethod === 'vodafone' || paymentMethod === 'instapay') {
                 const fileInput = document.getElementById('payment-receipt-file');
                 if (!fileInput || !fileInput.files || !fileInput.files[0]) {
-                    showToast("يرجى رفع صورة إيصال التحويل أولاً", "error");
+                    showToast("يرجى رفع إيصال التحويل", "error");
                     return;
                 }
                 const reader = new FileReader();
@@ -1504,32 +1451,24 @@
             }
         }
 
-        function sendOrderViaWhatsApp() {
-            submitOrder(true);
-        }
+        function sendOrderViaWhatsApp() { submitOrder(true); }
 
         function reorderPreviousOrder(orderId) {
             const oldOrder = state.orders.find(o => o.id === orderId);
             if (!oldOrder) return;
-
             state.cart = oldOrder.items.map(item => ({
                 restId: item.restId || 1,
                 restName: oldOrder.restaurant,
-                itemId: item.itemId || Date.now() + Math.random(),
+                itemId: item.itemId || Date.now(),
                 name: item.name,
                 price: item.price,
                 note: item.note || '',
                 count: item.count
             }));
-
-            document.getElementById('checkout-name').value = oldOrder.customer || '';
-            document.getElementById('checkout-phone').value = oldOrder.phone || '';
-            document.getElementById('checkout-address').value = oldOrder.address || '';
-
             saveState();
             updateCartUI();
             toggleCartDrawer(true);
-            showToast("تمت إضافة عناصر الطلب السابق للسلة مع بياناتك!");
+            showToast("تمت إضافة طلبات السابقة للسلة!");
         }
 
         function renderClientActiveOrders() {
@@ -1539,36 +1478,27 @@
                 return;
             }
 
-            container.innerHTML = state.orders.map(o => {
-                const itemsSummary = o.items.map(i => `${i.name} (×${i.count})`).join('، ');
-                return `
+            container.innerHTML = state.orders.map(o => `
                 <div class="border border-gray-100 dark:border-gray-800 rounded-xl p-3 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 text-xs">
                     <div class="space-y-0.5">
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-bold text-gray-900 dark:text-gray-100">${o.id}</span>
                             <span class="px-2 py-0.5 rounded text-[9px] font-bold ${getStatusBadge(o.status)}">${getStatusText(o.status)}</span>
-                            <span class="text-[10px] text-gray-400">${getPaymentMethodLabel(o.paymentMethod)}</span>
                         </div>
                         <p class="text-gray-600 dark:text-gray-300 font-semibold">${o.restaurant} • <span class="text-brand-600">${o.total} ج.م</span></p>
-                        <p class="text-[10px] text-gray-400">${itemsSummary}</p>
                     </div>
-                    <div class="flex flex-wrap items-center gap-1.5">
-                        <button onclick="reorderPreviousOrder('${o.id}')" class="bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1">
-                            <i class="fa-solid fa-rotate-right"></i> إعادة الطلب
-                        </button>
-                        <button onclick="openTrackingModal(${o.lat}, ${o.lng}, '${o.address}')" class="bg-brand-600 hover:bg-brand-700 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-map-location-dot"></i> تتبع الطلب
-                        </button>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="reorderPreviousOrder('${o.id}')" class="bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition">إعادة الطلب</button>
+                        <button onclick="openTrackingModal(${o.lat}, ${o.lng}, '${o.address}')" class="bg-brand-600 text-white px-3 py-1.5 rounded-xl text-[11px] font-bold">تتبع</button>
                     </div>
                 </div>
-            `}).join('');
+            `).join('');
         }
 
         let mapInstance = null;
         function openTrackingModal(lat, lng, address) {
             document.getElementById('tracking-modal').classList.remove('hidden');
             document.getElementById('track-address-text').innerText = `العنوان: ${address}`;
-
             setTimeout(() => {
                 if (!mapInstance) {
                     mapInstance = L.map('map').setView([lat, lng], 14);
@@ -1581,9 +1511,7 @@
             }, 200);
         }
 
-        function closeTrackingModal() {
-            document.getElementById('tracking-modal').classList.add('hidden');
-        }
+        function closeTrackingModal() { document.getElementById('tracking-modal').classList.add('hidden'); }
 
         function switchDriverTab(tab) {
             const ordersBtn = document.getElementById('driver-tab-orders');
@@ -1607,106 +1535,46 @@
 
         function toggleDriverOnlineStatus() {
             state.driverOnline = !state.driverOnline;
-            saveState();
-            const badge = document.getElementById('driver-status-badge');
-            if (state.driverOnline) {
-                badge.className = "bg-emerald-500/20 text-emerald-300 text-[10px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5";
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> متصل الآن`;
-                showToast("أنت الآن متصل");
-            } else {
-                badge.className = "bg-red-500/20 text-red-300 text-[10px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5";
-                badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span> مشغول`;
-                showToast("تم تحويل حالتك لـ مشغول");
-            }
+            showToast(state.driverOnline ? "أنت متصل الآن" : "أنت مشغول حالياً");
         }
 
         function renderDriverView() {
             const list = document.getElementById('driver-panel-orders');
             const completed = state.orders.filter(o => o.status === 'completed');
-            const earnings = completed.length * 15;
-
             document.getElementById('driver-completed-count').innerText = completed.length;
-            document.getElementById('driver-earnings').innerText = `${earnings} ج.م`;
+            document.getElementById('driver-earnings').innerText = `${completed.length * 15} ج.م`;
 
             if (state.orders.length === 0) {
                 list.innerHTML = `<p class="text-xs text-gray-400 py-4 text-center">لا توجد طلبات</p>`;
                 return;
             }
 
-            list.innerHTML = state.orders.map(order => {
-                const cleanPhone = (order.phone || '').replace(/[^0-9]/g, '');
-                const waPhone = cleanPhone.startsWith('0') ? '2' + cleanPhone : cleanPhone;
-                const waMsg = encodeURIComponent(`مرحباً ${order.customer}، أنا مندوب زاد اكسبريس في طريقي لتوصيل طلبك رقم ${order.id}`);
-                return `
-                <div class="border ${order.status === 'pending' ? 'border-amber-300 dark:border-amber-700 ring-2 ring-amber-400/20' : 'border-gray-100 dark:border-gray-800'} rounded-xl p-3 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col gap-2.5 text-xs">
+            list.innerHTML = state.orders.map(order => `
+                <div class="border rounded-xl p-3 bg-gray-50/50 dark:bg-gray-800/30 flex flex-col gap-2 text-xs">
                     <div class="flex justify-between items-center">
-                        <div class="flex items-center gap-2">
-                            <span class="font-bold text-gray-900 dark:text-gray-100">${order.id}</span>
-                            <span class="text-[10px] font-semibold text-gray-500">(${order.customer})</span>
-                        </div>
+                        <span class="font-bold">${order.id} (${order.customer})</span>
                         <span class="px-2 py-0.5 rounded font-bold text-[9px] ${getStatusBadge(order.status)}">${getStatusText(order.status)}</span>
                     </div>
-                    <p class="text-gray-600 dark:text-gray-300"><i class="fa-solid fa-store ml-1 text-brand-600"></i> ${order.restaurant} • <span class="font-bold text-brand-600">${order.total} ج.م</span> • <span class="text-[10px] text-gray-400">${getPaymentMethodLabel(order.paymentMethod)}</span></p>
-                    
-                    <div class="flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-gray-900 p-2 rounded-xl border border-gray-100 dark:border-gray-800">
-                        <p class="text-gray-600 dark:text-gray-300 text-[11px] flex-1 min-w-[160px]">
-                            <i class="fa-solid fa-location-dot ml-1 text-red-500"></i> ${order.address}
-                        </p>
-                        <div class="flex items-center gap-1.5 shrink-0">
-                            <a href="tel:${order.phone}" class="bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white px-2.5 py-1 rounded-lg font-bold text-[10px] transition flex items-center gap-1" title="اتصال هاتفي بالعميل">
-                                <i class="fa-solid fa-phone"></i> اتصال
-                            </a>
-                            <a href="https://wa.me/${waPhone}?text=${waMsg}" target="_blank" class="bg-[#25D366]/15 hover:bg-[#25D366] text-[#15803d] hover:text-white px-2.5 py-1 rounded-lg font-bold text-[10px] transition flex items-center gap-1" title="مراسلة العميل واتساب">
-                                <i class="fa-brands fa-whatsapp text-xs"></i> واتساب
-                            </a>
-                        </div>
+                    <p>${order.restaurant} • <span class="font-bold text-brand-600">${order.total} ج.م</span></p>
+                    <div class="flex gap-2 pt-1">
+                        ${order.status === 'pending' ? `<button onclick="updateOrderStatus('${order.id}', 'accepted')" class="bg-emerald-600 text-white px-3 py-1.5 rounded-xl">قبول الطلب</button>` : ''}
+                        ${order.status === 'accepted' ? `<button onclick="updateOrderStatus('${order.id}', 'delivering')" class="bg-blue-600 text-white px-3 py-1.5 rounded-xl">جاري التوصيل</button>` : ''}
+                        ${order.status === 'delivering' ? `<button onclick="updateOrderStatus('${order.id}', 'completed')" class="bg-emerald-600 text-white px-3 py-1.5 rounded-xl">تم التسليم</button>` : ''}
                     </div>
-
-                    <div class="flex flex-wrap gap-2 pt-0.5">
-                        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}" target="_blank" class="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-xl font-bold text-[11px] flex items-center gap-1">
-                            <i class="fa-solid fa-diamond-turn-right"></i> الخريطة
-                        </a>
-                        ${order.status === 'pending' ? `<button onclick="updateOrderStatus('${order.id}', 'accepted')" class="bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-xl text-[11px]">قبول الطلب</button>` : ''}
-                        ${order.status === 'accepted' ? `<button onclick="updateOrderStatus('${order.id}', 'delivering')" class="bg-blue-600 text-white font-bold px-3 py-1.5 rounded-xl text-[11px]">جاري التوصيل</button>` : ''}
-                        ${order.status === 'delivering' ? `<button onclick="updateOrderStatus('${order.id}', 'completed')" class="bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-xl text-[11px]">تم التسليم</button>` : ''}
-                    </div>
-                </div>
-            `}).join('');
-        }
-
-        function renderDriverFinance() {
-            const completed = state.orders.filter(o => o.status === 'completed');
-            const totalEarn = completed.length * 15;
-            document.getElementById('fin-today').innerText = `${totalEarn} ج.م`;
-            document.getElementById('fin-commission').innerText = `${totalEarn} ج.م`;
-            document.getElementById('fin-trips').innerText = `${completed.length}`;
-
-            const historyContainer = document.getElementById('driver-earnings-history');
-            if (completed.length === 0) {
-                historyContainer.innerHTML = `<p class="text-xs text-gray-400 text-center py-2">لا توجد رحلات مكتملة</p>`;
-                return;
-            }
-
-            historyContainer.innerHTML = completed.map(o => `
-                <div class="flex justify-between items-center p-2.5 border border-gray-100 dark:border-gray-800 rounded-xl text-xs">
-                    <div>
-                        <span class="font-bold text-gray-800 dark:text-gray-200">${o.id} - توصيل</span>
-                        <p class="text-gray-400 text-[10px]">${o.date}</p>
-                    </div>
-                    <span class="font-bold text-emerald-600">+15 ج.م</span>
                 </div>
             `).join('');
         }
 
+        function renderDriverFinance() {
+            const completed = state.orders.filter(o => o.status === 'completed');
+            document.getElementById('fin-today').innerText = `${completed.length * 15} ج.م`;
+            document.getElementById('fin-commission').innerText = `${completed.length * 15} ج.م`;
+            document.getElementById('fin-trips').innerText = completed.length;
+        }
+
         function updateOrderStatus(orderId, newStatus) {
-            const order = state.orders.find(o => o.id === orderId);
-            if (order) {
-                order.status = newStatus;
-                saveState();
-                renderDriverView();
-                renderClientActiveOrders();
-                showToast(`تم التحديث: ${getStatusText(newStatus)}`);
-            }
+            db.collection("orders").doc(orderId).update({ status: newStatus })
+              .then(() => showToast("تم تحديث حالة الطلب"));
         }
 
         function getStatusBadge(status) {
@@ -1749,16 +1617,16 @@
 
             const restList = document.getElementById('admin-restaurants-list');
             restList.innerHTML = state.restaurants.map(r => `
-                <div class="border border-gray-100 dark:border-gray-800 rounded-xl p-3 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center text-xs">
+                <div class="border rounded-xl p-3 flex justify-between items-center text-xs">
                     <div class="flex items-center gap-2.5">
-                        <img src="${r.image}" class="w-10 h-10 rounded-lg object-cover" onerror="this.src='https://placehold.co/100'">
+                        <img src="${r.image}" class="w-10 h-10 rounded-lg object-cover">
                         <div>
-                            <h4 class="font-bold text-gray-800 dark:text-gray-200">${r.name}</h4>
+                            <h4 class="font-bold">${r.name}</h4>
                             <span class="text-[9px] text-gray-400">${getCategoryLabel(r.category)}</span>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button onclick="toggleRestaurantOpen(${r.id})" class="px-2.5 py-1 rounded-lg text-[10px] font-bold ${r.isOpen ? 'bg-emerald-50 text-emerald-600 border' : 'bg-red-50 text-red-600 border'}">
+                        <button onclick="toggleRestaurantOpen(${r.id})" class="px-2 py-1 rounded-lg text-[10px] font-bold ${r.isOpen ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}">
                             ${r.isOpen ? 'مفتوح' : 'مغلق'}
                         </button>
                         <button onclick="deleteRestaurant(${r.id})" class="text-red-500"><i class="fa-solid fa-trash-can"></i></button>
@@ -1767,215 +1635,111 @@
             `).join('');
         }
 
-
-        function renderAdminAccounting() {
-            const totalOrders = state.orders.length;
-            const grossSales = state.orders.reduce((sum, o) => sum + o.total, 0);
-            const totalDiscounts = state.orders.reduce((sum, o) => {
-                const sub = o.subtotal || o.items.reduce((s, i) => s + (i.price * i.count), 0);
-                const disc = o.discountAmount !== undefined ? o.discountAmount : Math.max(0, (sub + 15) - o.total);
-                return sum + disc;
-            }, 0);
-            const deliveryFees = totalOrders * 15;
-            const foodSales = Math.max(0, grossSales - deliveryFees);
-            const platformFee = Math.round(foodSales * 0.15);
-            const restaurantsNet = foodSales - platformFee;
-
-            document.getElementById('acc-gross-sales').innerText = `${grossSales} ج.م`;
-            document.getElementById('acc-total-discounts').innerText = `${totalDiscounts} ج.م`;
-            document.getElementById('acc-platform-fee').innerText = `${platformFee} ج.م`;
-            document.getElementById('acc-delivery-fees').innerText = `${deliveryFees} ج.م`;
-            document.getElementById('acc-restaurants-net').innerText = `${restaurantsNet} ج.م`;
-
-            const invTable = document.getElementById('admin-invoices-table');
-            if (state.orders.length === 0) {
-                invTable.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-400">لا توجد فواتير مسجلة</td></tr>`;
-                return;
+        function toggleRestaurantOpen(id) {
+            const rest = state.restaurants.find(r => r.id === id);
+            if (rest) {
+                rest.isOpen = !rest.isOpen;
+                db.collection("restaurants").doc(String(rest.id)).update({ isOpen: rest.isOpen })
+                  .then(() => showToast("تم تحديث حالة المطعم"));
             }
-
-            invTable.innerHTML = state.orders.map(o => {
-                const sub = o.subtotal || o.items.reduce((s, i) => s + (i.price * i.count), 0);
-                const discAmt = o.discountAmount !== undefined ? o.discountAmount : Math.max(0, (sub + 15) - o.total);
-                const discPct = o.discountRate ? Math.round(o.discountRate * 100) : (sub > 0 && discAmt > 0 ? Math.round((discAmt / sub) * 100) : 0);
-                const discBadge = discAmt > 0
-                    ? `<span class="bg-rose-50 text-rose-600 px-2 py-0.5 rounded font-bold text-[10px]">${discPct}% (-${discAmt} ج.م)</span>`
-                    : `<span class="text-gray-400 text-[10px]">لا يوجد</span>`;
-
-                const payLabel = getPaymentMethodLabel(o.paymentMethod);
-                const receiptBadge = o.receiptImage
-                    ? `<button onclick="openInvoiceModal('${o.id}')" class="text-[10px] text-emerald-600 underline font-bold block">عرض الإيصال</button>`
-                    : '';
-                return `
-                    <tr>
-                        <td class="p-2.5 font-bold text-gray-800 dark:text-gray-200">${o.id}</td>
-                        <td class="p-2.5">${o.customer}</td>
-                        <td class="p-2.5">${o.restaurant}</td>
-                        <td class="p-2.5"><span class="text-[10px] font-bold">${payLabel}</span>${receiptBadge}</td>
-                        <td class="p-2.5">${discBadge}</td>
-                        <td class="p-2.5 font-bold text-brand-600">${o.total} ج.م</td>
-                        <td class="p-2.5">
-                            <button onclick="openInvoiceModal('${o.id}')" class="bg-brand-50 hover:bg-brand-600 text-brand-600 hover:text-white px-2.5 py-1 rounded-lg font-bold text-[11px] transition flex items-center gap-1">
-                                <i class="fa-solid fa-print"></i> فاتورة
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
         }
 
-        function openInvoiceModal(orderId) {
-            const order = state.orders.find(o => o.id === orderId);
-            if (!order) return;
+        function renderAdminMenuPanel() {
+            const selectRest = document.getElementById('dish-rest-id');
+            selectRest.innerHTML = state.restaurants.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
 
-            const subtotal = order.subtotal || order.items.reduce((sum, i) => sum + (i.price * i.count), 0);
-            const discountAmount = order.discountAmount !== undefined ? order.discountAmount : Math.max(0, (subtotal + 15) - order.total);
-            const discountPercent = order.discountRate ? Math.round(order.discountRate * 100) : (subtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / subtotal) * 100) : 0);
-            const delivery = 15;
-
-            const itemsHtml = order.items.map(i => `
-                <tr class="border-b border-gray-100">
-                    <td class="py-1.5 font-semibold">${i.name} ${i.note ? `<span class="text-[9px] text-gray-400 block">(${i.note})</span>` : ''}</td>
-                    <td class="py-1.5 text-center">${i.count}</td>
-                    <td class="py-1.5 text-left font-bold">${i.price * i.count} ج.م</td>
-                </tr>
-            `).join('');
-
-            const discountRowHtml = discountAmount > 0 ? `
-                <div class="flex justify-between text-rose-600 font-bold">
-                    <span>نسبة الخصم المطبقة (${discountPercent}%):</span>
-                    <span>-${discountAmount} ج.م</span>
-                </div>
-            ` : '';
-
-            document.getElementById('invoice-details-content').innerHTML = `
-                <div class="bg-gray-50 p-3 rounded-xl space-y-1 text-[11px]">
-                    <div class="flex justify-between"><span class="text-gray-500">رقم الفاتورة:</span> <span class="font-bold">${order.id}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-500">التاريخ والوقت:</span> <span class="font-bold">${new Date().toLocaleDateString('ar-EG')} - ${order.date}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-500">المطعم:</span> <span class="font-bold">${order.restaurant}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-500">اسم العميل:</span> <span class="font-bold">${order.customer}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-500">رقم الهاتف:</span> <span class="font-bold">${order.phone}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-500">عنوان التوصيل:</span> <span class="font-bold">${order.address}</span></div>
-                    <div class="flex justify-between"><span class="text-gray-500">طريقة الدفع:</span> <span class="font-bold text-brand-600">${getPaymentMethodLabel(order.paymentMethod)}</span></div>
-                </div>
-                ${order.receiptImage ? `
-                    <div class="border border-gray-200 rounded-xl p-2 text-center space-y-1">
-                        <span class="text-[10px] font-bold text-gray-500 block">صورة إيصال التحويل المرفقة</span>
-                        <img src="${order.receiptImage}" alt="إيصال التحويل" class="max-h-36 mx-auto rounded-lg object-contain">
-                    </div>
-                ` : ''}
-
-                <table class="w-full text-right text-[11px]">
-                    <thead class="border-b border-gray-200 text-gray-500">
-                        <tr>
-                            <th class="py-1.5">الصنف</th>
-                            <th class="py-1.5 text-center">الكمية</th>
-                            <th class="py-1.5 text-left">الإجمالي</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemsHtml}
-                    </tbody>
-                </table>
-
-                <div class="border-t border-gray-200 pt-2 space-y-1 text-[11px]">
-                    <div class="flex justify-between text-gray-500"><span>المجموع الفرعي:</span><span>${subtotal} ج.م</span></div>
-                    ${discountRowHtml}
-                    <div class="flex justify-between text-gray-500"><span>رسوم التوصيل:</span><span>${delivery} ج.م</span></div>
-                    <div class="flex justify-between font-extrabold text-sm text-gray-900 pt-1 border-t border-gray-200">
-                        <span>الإجمالي المستحق:</span>
-                        <span class="text-brand-600">${order.total} ج.م</span>
-                    </div>
-                </div>
-                <p class="text-center text-[10px] text-gray-400 pt-2">شكراً لطلبك من زاد اكسبريس!</p>
-            `;
-
-            document.getElementById('invoice-modal').classList.remove('hidden');
+            const list = document.getElementById('admin-all-dishes-list');
+            let html = '';
+            state.restaurants.forEach(r => {
+                if (r.menu) {
+                    r.menu.forEach(item => {
+                        html += `
+                            <div class="bg-white dark:bg-gray-800 border rounded-xl p-3 flex justify-between items-center text-xs">
+                                <div>
+                                    <span class="font-bold">${item.name} (${r.name})</span>
+                                    <span class="text-brand-600 font-bold block">${item.price} ج.م</span>
+                                </div>
+                                <button onclick="deleteMenuItem(${r.id}, ${item.id})" class="text-red-500"><i class="fa-solid fa-trash-can"></i></button>
+                            </div>
+                        `;
+                    });
+                }
+            });
+            list.innerHTML = html || '<p class="text-xs text-gray-400 text-center">لا توجد وجبات</p>';
         }
 
-        function closeInvoiceModal() {
-            document.getElementById('invoice-modal').classList.add('hidden');
-        }
-
-        function triggerInvoicePrint() {
-            window.print();
-        }
-
-        function printFinancialReport() {
-            const grossSales = state.orders.reduce((sum, o) => sum + o.total, 0);
-            const totalDiscounts = state.orders.reduce((sum, o) => {
-                const sub = o.subtotal || o.items.reduce((s, i) => s + (i.price * i.count), 0);
-                const disc = o.discountAmount !== undefined ? o.discountAmount : Math.max(0, (sub + 15) - o.total);
-                return sum + disc;
-            }, 0);
-            const deliveryFees = state.orders.length * 15;
-            const foodSales = Math.max(0, grossSales - deliveryFees);
-            const platformFee = Math.round(foodSales * 0.15);
-            const restaurantsNet = foodSales - platformFee;
-
-            document.getElementById('invoice-details-content').innerHTML = `
-                <div class="text-center border-b border-gray-200 pb-2">
-                    <h4 class="font-extrabold text-sm">التقرير المالي الشامل للمبيعات</h4>
-                    <p class="text-[10px] text-gray-500">تاريخ الإصدار: ${new Date().toLocaleDateString('ar-EG')}</p>
-                </div>
-                <div class="bg-gray-50 p-3 rounded-xl space-y-2 text-xs">
-                    <div class="flex justify-between"><span>عدد الطلبات الكلي:</span> <span class="font-bold">${state.orders.length} طلب</span></div>
-                    <div class="flex justify-between"><span>إجمالي المبيعات المحصلة:</span> <span class="font-bold text-brand-600">${grossSales} ج.م</span></div>
-                    <div class="flex justify-between text-rose-600"><span>إجمالي الخصومات الممنوحة:</span> <span class="font-bold">-${totalDiscounts} ج.م</span></div>
-                    <div class="flex justify-between"><span>إجمالي رسوم التوصيل:</span> <span class="font-bold">${deliveryFees} ج.م</span></div>
-                    <div class="flex justify-between"><span>عمولة المنصة (15%):</span> <span class="font-bold text-emerald-600">${platformFee} ج.م</span></div>
-                    <div class="flex justify-between border-t border-gray-200 pt-2"><span>صافي مستحقات المطاعم:</span> <span class="font-extrabold text-purple-700">${restaurantsNet} ج.م</span></div>
-                </div>
-            `;
-            document.getElementById('invoice-modal').classList.remove('hidden');
-        }
-
-
-        function renderAdminUsersPanel() {
-            const tbody = document.getElementById('admin-users-table');
-            tbody.innerHTML = state.users.map(u => {
-                const roleBadge = u.role === 'admin'
-                    ? `<span class="bg-purple-50 text-purple-700 px-2 py-0.5 rounded font-bold text-[10px]">مدير (Admin)</span>`
-                    : `<span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold text-[10px]">مندوب (Driver)</span>`;
-                return `
-                    <tr>
-                        <td class="p-2.5 font-bold text-gray-800 dark:text-gray-200">${u.name}</td>
-                        <td class="p-2.5 font-mono text-[11px]">${u.email}</td>
-                        <td class="p-2.5 font-mono text-[11px]">${u.password}</td>
-                        <td class="p-2.5">${roleBadge}</td>
-                        <td class="p-2.5">
-                            ${state.users.length > 1 ? `<button onclick="deleteUserAccount(${u.id})" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash-can"></i></button>` : '<span class="text-gray-400 text-[10px]">أساسي</span>'}
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-
-        function handleAddUserAccount(e) {
+        function handleAddMenuItem(e) {
             e.preventDefault();
-            const name = document.getElementById('new-user-name').value.trim();
-            const email = document.getElementById('new-user-email').value.trim().toLowerCase();
-            const password = document.getElementById('new-user-password').value.trim();
-            const role = document.getElementById('new-user-role').value;
+            const restId = Number(document.getElementById('dish-rest-id').value);
+            const name = document.getElementById('dish-name').value.trim();
+            const price = Number(document.getElementById('dish-price').value);
+            const desc = document.getElementById('dish-desc').value.trim();
 
-            if (state.users.some(u => u.email.toLowerCase() === email)) {
-                showToast("هذا البريد الإلكتروني مسجل بالفعل", "error");
-                return;
+            const rest = state.restaurants.find(r => r.id === restId);
+            if (rest) {
+                if (!rest.menu) rest.menu = [];
+                rest.menu.push({ id: Date.now(), name, price, desc });
+
+                db.collection("restaurants").doc(String(rest.id)).update({ menu: rest.menu })
+                  .then(() => {
+                      document.getElementById('dish-name').value = '';
+                      document.getElementById('dish-price').value = '';
+                      document.getElementById('dish-desc').value = '';
+                      showToast("تمت إضافة الوجبة لجميع العملاء بنجاح!");
+                  });
             }
-
-            state.users.push({ id: Date.now(), name, email, password, role });
-            saveState();
-            renderAdminUsersPanel();
-            document.getElementById('new-user-name').value = '';
-            document.getElementById('new-user-email').value = '';
-            document.getElementById('new-user-password').value = '';
-            showToast("تم إضافة المستخدم وصلاحياته بنجاح");
         }
 
-        function deleteUserAccount(userId) {
-            state.users = state.users.filter(u => u.id !== userId);
-            saveState();
-            renderAdminUsersPanel();
-            showToast("تم حذف الحساب");
+        function deleteMenuItem(restId, itemId) {
+            const rest = state.restaurants.find(r => r.id === restId);
+            if (rest) {
+                rest.menu = rest.menu.filter(i => i.id !== itemId);
+                db.collection("restaurants").doc(String(rest.id)).update({ menu: rest.menu })
+                  .then(() => {
+                      renderAdminMenuPanel();
+                      showToast("تم حذف الوجبة");
+                  });
+            }
+        }
+
+        function openAddRestaurantModal() { document.getElementById('add-rest-modal').classList.remove('hidden'); }
+        function closeAddRestaurantModal() { document.getElementById('add-rest-modal').classList.add('hidden'); }
+
+        function handleAddRestaurant(e) {
+            e.preventDefault();
+            const name = document.getElementById('new-rest-name').value.trim();
+            const category = document.getElementById('new-rest-category').value;
+            const fileInput = document.getElementById('new-rest-image-file');
+
+            if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const newRest = {
+                        id: Date.now(), name, category,
+                        isOpen: true, rating: 5.0, time: "20-30 دقيقة",
+                        image: event.target.result,
+                        reviews: [],
+                        menu: [{ id: Date.now()+1, name: "وجبة المطعم", price: 130, desc: "وجبة مميزة وطازجة" }]
+                    };
+
+                    db.collection("restaurants").doc(String(newRest.id)).set(newRest)
+                      .then(() => {
+                          closeAddRestaurantModal();
+                          showToast("تمت إضافة المطعم ورفعه للسحابة لجميع العملاء!");
+                      });
+                };
+                reader.readAsDataURL(fileInput.files[0]);
+            }
+        }
+
+        function deleteRestaurant(id) {
+            db.collection("restaurants").doc(String(id)).delete()
+              .then(() => showToast("تم حذف المطعم"));
+        }
+
+        function deleteOrder(id) {
+            db.collection("orders").doc(String(id)).delete()
+              .then(() => showToast("تم حذف الطلب"));
         }
 
         function switchAdminTab(tab) {
@@ -1993,116 +1757,6 @@
             document.getElementById(`admin-panel-${tab}`).classList.remove('hidden');
 
             if (tab === 'menu') renderAdminMenuPanel();
-            if (tab === 'accounting') renderAdminAccounting();
-            if (tab === 'users') renderAdminUsersPanel();
-        }
-
-        function toggleRestaurantOpen(id) {
-            const rest = state.restaurants.find(r => r.id === id);
-            if (rest) {
-                rest.isOpen = !rest.isOpen;
-                saveState();
-                renderAdminView();
-                renderRestaurants();
-                showToast("تم تحديث الحالة");
-            }
-        }
-
-        function renderAdminMenuPanel() {
-            const selectRest = document.getElementById('dish-rest-id');
-            selectRest.innerHTML = state.restaurants.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
-
-            const list = document.getElementById('admin-all-dishes-list');
-            let html = '';
-            state.restaurants.forEach(r => {
-                r.menu.forEach(item => {
-                    html += `
-                        <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-3 flex justify-between items-center text-xs">
-                            <div>
-                                <span class="font-bold text-gray-800 dark:text-gray-200">${item.name} (${r.name})</span>
-                                <span class="text-brand-600 font-bold block">${item.price} ج.م</span>
-                            </div>
-                            <button onclick="deleteMenuItem(${r.id}, ${item.id})" class="text-red-500"><i class="fa-solid fa-trash-can"></i></button>
-                        </div>
-                    `;
-                });
-            });
-            list.innerHTML = html || '<p class="text-xs text-gray-400 text-center">لا توجد وجبات</p>';
-        }
-
-        function handleAddMenuItem(e) {
-            e.preventDefault();
-            const restId = Number(document.getElementById('dish-rest-id').value);
-            const name = document.getElementById('dish-name').value.trim();
-            const price = Number(document.getElementById('dish-price').value);
-            const desc = document.getElementById('dish-desc').value.trim();
-
-            const rest = state.restaurants.find(r => r.id === restId);
-            if (rest) {
-                rest.menu.push({ id: Date.now(), name, price, desc });
-                saveState();
-                renderAdminMenuPanel();
-                renderRestaurants();
-                document.getElementById('dish-name').value = '';
-                document.getElementById('dish-price').value = '';
-                document.getElementById('dish-desc').value = '';
-                showToast("تمت الإضافة بنجاح");
-            }
-        }
-
-        function deleteMenuItem(restId, itemId) {
-            const rest = state.restaurants.find(r => r.id === restId);
-            if (rest) {
-                rest.menu = rest.menu.filter(i => i.id !== itemId);
-                saveState();
-                renderAdminMenuPanel();
-                showToast("تم الحذف");
-            }
-        }
-
-        function openAddRestaurantModal() { document.getElementById('add-rest-modal').classList.remove('hidden'); }
-        function closeAddRestaurantModal() { document.getElementById('add-rest-modal').classList.add('hidden'); }
-
-        function handleAddRestaurant(e) {
-            e.preventDefault();
-            const name = document.getElementById('new-rest-name').value.trim();
-            const category = document.getElementById('new-rest-category').value;
-            const fileInput = document.getElementById('new-rest-image-file');
-
-            if (fileInput.files && fileInput.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    state.restaurants.unshift({
-                        id: Date.now(), name, category,
-                        isOpen: true, rating: 5.0, time: "20-30 دقيقة",
-                        image: event.target.result,
-                        reviews: [],
-                        menu: [{ id: Date.now()+1, name: "وجبة المطعم", price: 130, desc: "وجبة مميزة وطازجة" }]
-                    });
-                    saveState();
-                    renderAdminView();
-                    renderRestaurants();
-                    closeAddRestaurantModal();
-                    showToast("تمت إضافة المطعم بنجاح");
-                };
-                reader.readAsDataURL(fileInput.files[0]);
-            }
-        }
-
-        function deleteRestaurant(id) {
-            state.restaurants = state.restaurants.filter(r => r.id !== id);
-            saveState();
-            renderAdminView();
-            renderRestaurants();
-            showToast("تم الحذف");
-        }
-
-        function deleteOrder(id) {
-            state.orders = state.orders.filter(o => o.id !== id);
-            saveState();
-            renderAdminView();
-            renderClientActiveOrders();
-            showToast("تم الحذف");
         }
 
         function showToast(msg, type = "success") {
@@ -2118,180 +1772,54 @@
                 toast.classList.add('opacity-0', 'pointer-events-none');
             }, 2500);
         }
-    
-        // ========================================================
-        // FULL SELF-CONTAINED PWA SETUP (Manifest + Service Worker)
-        // ========================================================
-        (function initSelfContainedPWA() {
-            // 1. Generate SVG App Icon dynamically as Data URL (works offline & anywhere)
-            const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-                <defs>
-                    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stop-color="#2563eb"/>
-                        <stop offset="100%" stop-color="#4f46e5"/>
-                    </linearGradient>
-                </defs>
-                <rect width="512" height="512" rx="110" fill="url(#g)"/>
-                <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="250" fill="#ffffff">🛵</text>
-            </svg>`;
-            const iconUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgIcon);
+    </script>
 
-            // 2. Build Web App Manifest dynamically so Chrome/Android recognizes it as a native installable app
-            const manifestObj = {
-                name: "زاد اكسبريس للتوصيل السريع",
-                short_name: "زاد اكسبريس",
-                description: "منصة توصيل الطعام الذكية الأسرع والأكثر موثوقية",
-                start_url: window.location.href.split('#')[0],
-                display: "standalone",
-                orientation: "portrait",
-                background_color: "#ffffff",
-                theme_color: "#2563eb",
-                dir: "rtl",
-                lang: "ar",
-                icons: [
-                    { src: iconUrl, sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
-                    { src: iconUrl, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
-                ]
-            };
+    <!-- Firebase Configuration & Real-time Sync Listeners -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyANwjxRm_gvlwoTAxM-M8Pc3RzXA6C4Tu4",
+            authDomain: "zaadexpress.firebaseapp.com",
+            projectId: "zaadexpress",
+            storageBucket: "zaadexpress.firebasestorage.app",
+            messagingSenderId: "296167696825",
+            appId: "1:296167696825:web:c412013dd0c061cdca2e68",
+            measurementId: "G-C4E4M7NGXF"
+        };
 
-            const manifestBlob = new Blob([JSON.stringify(manifestObj)], { type: 'application/manifest+json' });
-            const manifestURL = URL.createObjectURL(manifestBlob);
-            const manifestLink = document.getElementById('pwa-manifest-link');
-            if (manifestLink) manifestLink.setAttribute('href', manifestURL);
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
 
-            // 3. Register inline Service Worker (required by Chrome/Android to show the native Install App popup)
-            if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
-                const swCode = `
-                    const CACHE_NAME = 'zaad-express-pwa-v1';
-                    self.addEventListener('install', (event) => {
-                        self.skipWaiting();
-                    });
-                    self.addEventListener('activate', (event) => {
-                        event.waitUntil(clients.claim());
-                    });
-                    self.addEventListener('fetch', (event) => {
-                        event.respondWith(
-                            fetch(event.request).catch(() => caches.match(event.request))
-                        );
-                    });
-                `;
-                const swBlob = new Blob([swCode], { type: 'application/javascript' });
-                const swURL = URL.createObjectURL(swBlob);
-                navigator.serviceWorker.register(swURL).catch(() => {});
-            }
-        })();
-
-        let deferredPrompt = null;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            const banner = document.getElementById('pwa-install-banner');
-            if (banner) banner.classList.remove('hidden');
-        });
-
-        window.addEventListener('appinstalled', () => {
-            deferredPrompt = null;
-            const banner = document.getElementById('pwa-install-banner');
-            if (banner) banner.classList.add('hidden');
-            showToast("تم تثبيت تطبيق زاد اكسبريس على هاتفك بنجاح 🎉");
-        });
-
-        // Hide install banner if already running inside the installed standalone app
-        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
-            window.addEventListener('DOMContentLoaded', () => {
-                const banner = document.getElementById('pwa-install-banner');
-                if (banner) banner.classList.add('hidden');
+        // المزامنة اللحظية للمطاعم والوجبات عبر السحابة لجميع العملاء والهواتف
+        db.collection("restaurants").onSnapshot((snapshot) => {
+            const cloudRestaurants = [];
+            snapshot.forEach((doc) => {
+                cloudRestaurants.push(doc.data());
             });
-        }
-
-        function installPWAApp() {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        showToast("جاري تثبيت تطبيق زاد اكسبريس على شاشتك الرئيسية...");
-                    }
-                    deferredPrompt = null;
-                });
-            } else {
-                // Show clean visual guide for iPhone (Safari) or manual browser menu installation
-                document.getElementById('pwa-guide-modal').classList.remove('hidden');
+            if (cloudRestaurants.length > 0) {
+                state.restaurants = cloudRestaurants;
+                saveState();
+                renderRestaurants();
+                if (!document.getElementById('view-admin').classList.contains('hidden')) {
+                    renderAdminView();
+                }
             }
-        }
+        });
 
-</script>
-
-    <!-- Restaurant Footer Section -->
-    <footer class="bg-gradient-to-br from-brand-700 via-brand-600 to-indigo-700 dark:from-slate-900 dark:via-gray-900 dark:to-indigo-950 text-white border-t border-brand-500/30 dark:border-gray-800 mt-10 py-8 px-4 text-xs shadow-inner">
-        <div class="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-6 text-center sm:text-right">
-            <div class="space-y-2.5">
-                <div class="flex items-center justify-center sm:justify-start gap-2.5">
-                    <div class="bg-white/15 backdrop-blur-md text-white p-2 rounded-xl border border-white/20 shadow-xs">
-                        <i class="fa-solid fa-utensils text-sm"></i>
-                    </div>
-                    <div>
-                        <span class="font-extrabold text-base text-white tracking-wide block">زاد اكسبريس</span>
-                        <span class="text-[10px] text-brand-100/80 block">Zaad Express Delivery</span>
-                    </div>
-                </div>
-                <p class="text-brand-100/90 dark:text-gray-400 text-[11px] leading-relaxed">
-                    منصة توصيل الطعام الذكية الأسرع والأكثر موثوقية لطلب ألذ الوجبات من أفضل المطاعم مباشرة إلى باب منزلك.
-                </p>
-            </div>
-            <div class="space-y-2.5">
-                <h4 class="font-bold text-white text-sm flex items-center justify-center sm:justify-start gap-1.5">
-                    <span class="w-1.5 h-4 bg-accent rounded-full inline-block"></span>
-                    تواصل معنا والدعم
-                </h4>
-                <p class="text-brand-100 dark:text-gray-300 text-[11px]">
-                    <i class="fa-solid fa-phone ml-1.5 text-amber-300"></i> الخط الساخن: <span class="font-bold text-white">19999</span>
-                </p>
-                <p class="text-brand-100 dark:text-gray-300 text-[11px]">
-                    <i class="fa-solid fa-envelope ml-1.5 text-amber-300"></i> support@zaadexpress.com
-                </p>
-                <p class="text-brand-100 dark:text-gray-300 text-[11px]">
-                    <i class="fa-brands fa-whatsapp ml-1.5 text-emerald-300"></i> واتساب الطلبات: <a href="https://wa.me/201100181646" target="_blank" class="underline hover:text-white font-bold">01100181646</a>
-                </p>
-            </div>
-            <div class="space-y-2.5">
-                <h4 class="font-bold text-white text-sm flex items-center justify-center sm:justify-start gap-1.5">
-                    <span class="w-1.5 h-4 bg-accent rounded-full inline-block"></span>
-                    تابعنا على منصات التواصل
-                </h4>
-                <p class="text-brand-100/80 dark:text-gray-400 text-[11px]">اشترك ليصلك أحدث العروض والخصومات اليومية</p>
-                <div class="flex justify-center sm:justify-start gap-2.5 pt-1">
-                    <a href="#" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white hover:text-brand-600 border border-white/15 flex items-center justify-center text-sm transition"><i class="fa-brands fa-facebook-f"></i></a>
-                    <a href="#" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white hover:text-pink-600 border border-white/15 flex items-center justify-center text-sm transition"><i class="fa-brands fa-instagram"></i></a>
-                    <a href="#" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white hover:text-sky-500 border border-white/15 flex items-center justify-center text-sm transition"><i class="fa-brands fa-twitter"></i></a>
-                    <a href="https://wa.me/201100181646" target="_blank" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-[#25D366] hover:text-white border border-white/15 flex items-center justify-center text-sm transition"><i class="fa-brands fa-whatsapp"></i></a>
-                </div>
-            </div>
-        </div>
-        <div class="max-w-7xl mx-auto border-t border-white/15 dark:border-gray-800 mt-6 pt-4 flex flex-col sm:flex-row justify-between items-center gap-2 text-brand-100/80 dark:text-gray-400 text-[10px]">
-            <span>جميع الحقوق محفوظة © 2026 زاد اكسبريس للتوصيل السريع</span>
-            <span class="bg-white/10 px-2.5 py-0.5 rounded-full text-white/90">توصيل سريع • دفع آمن • دعم 24/7</span>
-        </div>
-    </footer>
-
-
-<script>
-  // بيانات مشروعك الخاصة بـ Firebase (ZaadExpress)
-  const firebaseConfig = {
-    apiKey: "AIzaSyANwjxRm_gvlwoTAxM-M8Pc3RzXA6C4Tu4",
-    authDomain: "zaadexpress.firebaseapp.com",
-    projectId: "zaadexpress",
-    storageBucket: "zaadexpress.firebasestorage.app",
-    messagingSenderId: "296167696825",
-    appId: "1:296167696825:web:c412013dd0c061cdca2e68",
-    measurementId: "G-C4E4M7NGXF"
-  };
-
-  // تهيئة التطبيق وقاعدة البيانات
-  if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-  }
-  const db = firebase.firestore();
-</script>
+        // المزامنة اللحظية للطلبات
+        db.collection("orders").onSnapshot((snapshot) => {
+            const cloudOrders = [];
+            snapshot.forEach((doc) => {
+                cloudOrders.push(doc.data());
+            });
+            state.orders = cloudOrders.sort((a, b) => b.id.localeCompare(a.id));
+            saveState();
+            renderClientActiveOrders();
+            checkNewPendingOrders(false);
+            if (!document.getElementById('view-driver').classList.contains('hidden')) renderDriverView();
+            if (!document.getElementById('view-admin').classList.contains('hidden')) renderAdminView();
+        });
+    </script>
 </body>
-
 </html>
